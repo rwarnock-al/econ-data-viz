@@ -10,3 +10,6 @@
 *.sql
 drafts/
 data/
+
+# Local tooling
+.claude/

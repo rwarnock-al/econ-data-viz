@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Best Cities for Renters 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  /* Values from blueprints-component-library DESIGN.md tokens.
+     FONT: Inter stands in for Haffer (licensing) — swap --font-body when moving to the company repo. */
+  :root {
+    --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --text-default: #333333;     /* text-default */
+    --text-secondary: #696969;   /* text-secondary */
+    --stroke: #cccccc;           /* component-stroke */
+    --surface: #ffffff;          /* surface-background */
+    --purple-400: #6105c4;       /* primary */
+    --purple-600: #3a0376;
+    --purple-100: #e8dfff;       /* surface-selected */
+    --land: #a776ff;             /* purple-300 */
+    --land-stroke: #4e049d;      /* purple-500 */
+    --marker: #fc5d77;           /* coral-400 */
+    --marker-stroke: #1d023b;    /* purple-800 */
+  }
+  html, body { margin: 0; background: var(--surface); }
+  body {
+    font-family: var(--font-body);
+    color: var(--text-default);
+    font-size: 14px; line-height: 1.6; letter-spacing: 0.02em;
+  }
+  .viz { max-width: 775px; margin: 0 auto; padding: 8px 0; }
+
+  .title { font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: 0.01em; text-align: center; margin: 0 12px 10px; }
+  .pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 0 8px; }
+  .pill {
+    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
+    padding: 5px 10px; border-radius: 9999px; cursor: pointer;
+    border: 1px solid var(--stroke); background: var(--surface); color: var(--text-default);
+  }
+  .pill:hover { background: var(--purple-100); }
+  .pill[aria-pressed="true"] { background: var(--purple-400); border-color: var(--purple-400); color: #fff; }
+  .pill:focus-visible { outline: 2px solid var(--purple-400); outline-offset: 2px; }
+
+  svg { display: block; width: 100%; height: auto; }
+  .state { fill: var(--land); stroke: var(--land-stroke); stroke-width: 0.75; stroke-linejoin: round; }
+  .anchor { fill: var(--marker-stroke); }
+  .leader { stroke: var(--marker-stroke); stroke-width: 1; }
+  .badge circle, .exiting circle { fill: var(--marker); stroke: var(--marker-stroke); stroke-width: 1.5; }
+  .badge .num, .exiting .num { font-size: 12px; font-weight: 600; fill: var(--marker-stroke); text-anchor: middle; dominant-baseline: central; }
+  .label {
+    font-size: 13px; font-weight: 600; fill: var(--text-default); dominant-baseline: central; text-anchor: start;
+    paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
+  }
+  .source { font-size: 12px; color: var(--text-secondary); padding: 0 12px; }
+</style>
+</head>
+<body>
+<div class="viz">
+  <h1 class="title">Best Cities For Renters: Category Ranks</h1>
+  <div class="pills" role="group" aria-label="Ranking category"></div>
+  <svg id="map" viewBox="0 0 775 455" role="img" aria-label="Map of the top 10 cities for renters in the selected category"></svg>
+  <div class="source">Source: Apartment List Best Cities for Renters, 2026</div>
+</div>
+
+<script>
+const DATA = [
+  {category: "Overall", rank: 1, city: "Austin, TX", lat: 30.2672, lon: -97.7431},
+  {category: "Overall", rank: 2, city: "Salt Lake City, UT", lat: 40.7608, lon: -111.891},
+  {category: "Overall", rank: 3, city: "Charleston, SC", lat: 32.7765, lon: -79.9311},
+  {category: "Overall", rank: 4, city: "Seattle, WA", lat: 47.6062, lon: -122.3321},
+  {category: "Overall", rank: 5, city: "Arlington, VA", lat: 38.8799, lon: -77.1068},
+  {category: "Overall", rank: 6, city: "Charlotte, NC", lat: 35.2271, lon: -80.8431},
+  {category: "Overall", rank: 7, city: "Raleigh, NC", lat: 35.7796, lon: -78.6382},
+  {category: "Overall", rank: 8, city: "Atlanta, GA", lat: 33.749, lon: -84.388},
+  {category: "Overall", rank: 9, city: "Phoenix, AZ", lat: 33.4484, lon: -112.074},
+  {category: "Overall", rank: 10, city: "Nashville, TN", lat: 36.1627, lon: -86.7816},
+  {category: "Housing Affordability", rank: 1, city: "Des Moines, IA", lat: 41.5868, lon: -93.625},
+  {category: "Housing Affordability", rank: 2, city: "Austin, TX", lat: 30.2672, lon: -97.7431},
+  {category: "Housing Affordability", rank: 3, city: "Salt Lake City, UT", lat: 40.7608, lon: -111.891},
+  {category: "Housing Affordability", rank: 4, city: "Columbus, OH", lat: 39.9612, lon: -82.9988},
+  {category: "Housing Affordability", rank: 5, city: "Denver, CO", lat: 39.7392, lon: -104.9903},
+  {category: "Housing Affordability", rank: 6, city: "St. Louis, MO", lat: 38.627, lon: -90.1994},
+  {category: "Housing Affordability", rank: 7, city: "Charlotte, NC", lat: 35.2271, lon: -80.8431},
+  {category: "Housing Affordability", rank: 8, city: "Chattanooga, TN", lat: 35.0456, lon: -85.3097},
+  {category: "Housing Affordability", rank: 9, city: "Louisville, KY", lat: 38.2527, lon: -85.7585},
+  {category: "Housing Affordability", rank: 10, city: "Phoenix, AZ", lat: 33.4484, lon: -112.074},
+  {category: "Housing Leverage", rank: 1, city: "Salt Lake City, UT", lat: 40.7608, lon: -111.891},
+  {category: "Housing Leverage", rank: 2, city: "Charlotte, NC", lat: 35.2271, lon: -80.8431},
+  {category: "Housing Leverage", rank: 3, city: "Miami, FL", lat: 25.7617, lon: -80.1918},
+  {category: "Housing Leverage", rank: 4, city: "Tampa, FL", lat: 27.9506, lon: -82.4572},
+  {category: "Housing Leverage", rank: 5, city: "Phoenix, AZ", lat: 33.4484, lon: -112.074},
+  {category: "Housing Leverage", rank: 6, city: "Austin, TX", lat: 30.2672, lon: -97.7431},
+  {category: "Housing Leverage", rank: 7, city: "Fort Worth, TX", lat: 32.7555, lon: -97.3308},
+  {category: "Housing Leverage", rank: 8, city: "Asheville, NC", lat: 35.5951, lon: -82.5515},
+  {category: "Housing Leverage", rank: 9, city: "Raleigh, NC", lat: 35.7796, lon: -78.6382},
+  {category: "Housing Leverage", rank: 10, city: "Orlando, FL", lat: 28.5383, lon: -81.3792},
+  {category: "Cost of Living", rank: 1, city: "Kansas City, MO", lat: 39.0997, lon: -94.5786},
+  {category: "Cost of Living", rank: 2, city: "Oklahoma City, OK", lat: 35.4676, lon: -97.5164},
+  {category: "Cost of Living", rank: 3, city: "Knoxville, TN", lat: 35.9606, lon: -83.9207},
+  {category: "Cost of Living", rank: 4, city: "Chattanooga, TN", lat: 35.0456, lon: -85.3097},
+  {category: "Cost of Living", rank: 5, city: "Corpus Christi, TX", lat: 27.8006, lon: -97.3964},
+  {category: "Cost of Living", rank: 6, city: "Memphis, TN", lat: 35.1495, lon: -90.049},
+  {category: "Cost of Living", rank: 7, city: "Des Moines, IA", lat: 41.5868, lon: -93.625},
+  {category: "Cost of Living", rank: 8, city: "Birmingham, AL", lat: 33.5186, lon: -86.8104},
+  {category: "Cost of Living", rank: 9, city: "Baton Rouge, LA", lat: 30.4515, lon: -91.1871},
+  {category: "Cost of Living", rank: 10, city: "Indianapolis, IN", lat: 39.7684, lon: -86.1581},
+  {category: "Economic Opportunity", rank: 1, city: "Austin, TX", lat: 30.2672, lon: -97.7431},
+  {category: "Economic Opportunity", rank: 2, city: "Arlington, VA", lat: 38.8799, lon: -77.1068},
+  {category: "Economic Opportunity", rank: 3, city: "Charleston, SC", lat: 32.7765, lon: -79.9311},
+  {category: "Economic Opportunity", rank: 4, city: "Raleigh, NC", lat: 35.7796, lon: -78.6382},
+  {category: "Economic Opportunity", rank: 5, city: "Nashville, TN", lat: 36.1627, lon: -86.7816},
+  {category: "Economic Opportunity", rank: 6, city: "Miami, FL", lat: 25.7617, lon: -80.1918},
+  {category: "Economic Opportunity", rank: 7, city: "Oklahoma City, OK", lat: 35.4676, lon: -97.5164},
+  {category: "Economic Opportunity", rank: 8, city: "Chattanooga, TN", lat: 35.0456, lon: -85.3097},
+  {category: "Economic Opportunity", rank: 9, city: "Salt Lake City, UT", lat: 40.7608, lon: -111.891},
+  {category: "Economic Opportunity", rank: 10, city: "Fort Worth, TX", lat: 32.7555, lon: -97.3308},
+  {category: "Lifestyle", rank: 1, city: "San Francisco, CA", lat: 37.7749, lon: -122.4194},
+  {category: "Lifestyle", rank: 2, city: "Oakland, CA", lat: 37.8044, lon: -122.2712},
+  {category: "Lifestyle", rank: 3, city: "Washington, DC", lat: 38.9072, lon: -77.0369},
+  {category: "Lifestyle", rank: 4, city: "Seattle, WA", lat: 47.6062, lon: -122.3321},
+  {category: "Lifestyle", rank: 5, city: "San Jose, CA", lat: 37.3382, lon: -121.8863},
+  {category: "Lifestyle", rank: 6, city: "Arlington, VA", lat: 38.8799, lon: -77.1068},
+  {category: "Lifestyle", rank: 7, city: "San Diego, CA", lat: 32.7157, lon: -117.1611},
+  {category: "Lifestyle", rank: 8, city: "Boston, MA", lat: 42.3601, lon: -71.0589},
+  {category: "Lifestyle", rank: 9, city: "New York City, NY", lat: 40.7128, lon: -74.006},
+  {category: "Lifestyle", rank: 10, city: "Los Angeles, CA", lat: 34.0522, lon: -118.2437},
+];
+
+const W = 775, H = 455, R = 11;            // viewBox size, badge radius
+const NON_LOWER48 = new Set(["02", "15", "60", "66", "69", "72", "78"]); // AK, HI, territories
+const CATEGORIES = [...new Set(DATA.map(d => d.category))];
+const LABELS = {"Washington, DC": "Washington DC"};  // display-name exceptions
+const shortName = city => LABELS[city] || city.split(",")[0];
+
+const svg = d3.select("#map");
+const gStates = svg.append("g");
+const gLeaders = svg.append("g");
+const gBadges = svg.append("g");
+let projection, firstRender = true;
+
+// --- Pills -----------------------------------------------------------------
+const pills = d3.select(".pills").selectAll("button")
+  .data(CATEGORIES).join("button")
+  .attr("type", "button").attr("class", "pill")
+  .text(d => d)
+  .on("click", (_, d) => render(d));
+
+// Hand-placed badges for clusters the automatic nudge can't arrange geographically.
+// dx/dy: badge offset (px) from the city's true location; label: forced label side.
+const OVERRIDES = {
+  "Lifestyle": {
+    "San Francisco, CA": {dx: -14, dy: -24, label: "above"},
+    "Oakland, CA":       {dx: 14,  dy: -24, label: "right"},
+    "San Jose, CA":      {dx: 6,   dy: 27,  label: "right"},
+    "Washington, DC":    {dx: 16,  dy: -6,  label: "right"},
+    "Arlington, VA":     {dx: -16, dy: 8,   label: "left"},
+  },
+};
+
+// --- Layout ----------------------------------------------------------------
+// 1) project; 2) apply overrides, nudge remaining overlapping badges apart (force sim, run synchronously);
+// 3) place each label at the right/left/above/below/diagonal spot with the fewest collisions.
+// Label positions are stored as the text's left edge (lx) and vertical center (ly) relative to
+// the badge, always rendered with text-anchor "start" so they can transition smoothly.
+function layout(category) {
+  const overrides = OVERRIDES[category] || {};
+  const nodes = DATA.filter(d => d.category === category).map(d => {
+    const [x, y] = projection([d.lon, d.lat]);
+    const o = overrides[d.city];
+    return o ? {...d, x0: x, y0: y, x: x + o.dx, y: y + o.dy, fx: x + o.dx, fy: y + o.dy, forceLabel: o.label}
+             : {...d, x0: x, y0: y, x, y};
+  });
+  const sim = d3.forceSimulation(nodes)
+    .force("x", d3.forceX(d => d.x0).strength(0.6))
+    .force("y", d3.forceY(d => d.y0).strength(0.1))
+    .force("collide", d3.forceCollide(R + 3))
+    .stop();
+  for (let i = 0; i < 300; i++) {
+    sim.tick();
+    nodes.forEach(n => { n.x = Math.max(R + 2, Math.min(W - R - 2, n.x)); n.y = Math.max(R + 2, Math.min(H - R - 2, n.y)); });
+  }
+  nodes.forEach(n => { if (n.fx != null) { n.x = n.fx; n.y = n.fy; } });
+
+  const boxes = nodes.map(n => ({x1: n.x - R, y1: n.y - R, x2: n.x + R, y2: n.y + R}));
+  const overlaps = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+  const measure = gBadges.append("text").attr("class", "label").style("visibility", "hidden");
+
+  [...nodes].sort((a, b) => a.rank - b.rank).forEach(n => {
+    const w = measure.text(shortName(n.city)).node().getComputedTextLength();
+    const h = 14, gap = 4, d = R * 0.7;
+    const options = [
+      {side: "right", lx: R + gap,          ly: 0},
+      {side: "left",  lx: -R - gap - w,     ly: 0},
+      {side: "above", lx: -w / 2,           ly: -R - gap - h / 2},
+      {side: "below", lx: -w / 2,           ly: R + gap + h / 2},
+      {side: "below-right", lx: d,          ly: R + h / 2},
+      {side: "above-right", lx: d,          ly: -R - h / 2},
+      {side: "below-left",  lx: -d - w,     ly: R + h / 2},
+      {side: "above-left",  lx: -d - w,     ly: -R - h / 2},
+    ].map(o => ({...o, box: {x1: n.x + o.lx, x2: n.x + o.lx + w, y1: n.y + o.ly - h / 2, y2: n.y + o.ly + h / 2}}));
+    const inBounds = b => b.x1 >= 0 && b.x2 <= W && b.y1 >= 0 && b.y2 <= H;
+    const score = o => (inBounds(o.box) ? 0 : 100) + boxes.filter(b => overlaps(o.box, b)).length;
+    const candidates = n.forceLabel ? options.filter(o => o.side === n.forceLabel) : options;
+    const best = candidates.reduce((a, b) => score(b) < score(a) ? b : a);
+    n.label = best;
+    boxes.push(best.box);
+  });
+  measure.remove();
+  return nodes;
+}
+
+// --- Render ----------------------------------------------------------------
+// Switching categories is a pure crossfade: elements are keyed by category + city, so the old view
+// fades out and the new one fades in (no sliding), even for cities that appear in both.
+function render(category) {
+  pills.attr("aria-pressed", d => d === category);
+  const nodes = layout(category);
+  const key = d => `${d.category}|${d.city}`;
+  const t = svg.transition().duration(firstRender ? 0 : 500);
+  firstRender = false;
+  svg.selectAll(".exiting").interrupt().remove();  // clear anything still fading out from a previous click
+
+  gLeaders.selectAll("g.leader-g")
+    .data(nodes.filter(n => Math.hypot(n.x - n.x0, n.y - n.y0) > R), key)
+    .join(
+      enter => {
+        const g = enter.append("g").attr("class", "leader-g").style("opacity", 0);
+        g.append("line").attr("class", "leader")
+          .attr("x1", d => d.x0).attr("y1", d => d.y0).attr("x2", d => d.x).attr("y2", d => d.y);
+        g.append("circle").attr("class", "anchor").attr("r", 2.5).attr("cx", d => d.x0).attr("cy", d => d.y0);
+        return g;
+      },
+      update => update,
+      exit => exit.attr("class", "exiting").transition(t).style("opacity", 0).remove()
+    )
+    .call(g => g.transition(t).style("opacity", 1));
+
+  gBadges.selectAll("g.badge")
+    .data(nodes, key)
+    .join(
+      enter => {
+        const g = enter.append("g").attr("class", "badge")
+          .attr("transform", d => `translate(${d.x},${d.y})`).style("opacity", 0);
+        g.append("circle").attr("r", R);
+        g.append("text").attr("class", "num").text(d => d.rank);
+        g.append("text").attr("class", "label").text(d => shortName(d.city))
+          .attr("x", d => d.label.lx).attr("y", d => d.label.ly);
+        return g;
+      },
+      update => update,
+      exit => exit.attr("class", "exiting").transition(t).style("opacity", 0).remove()
+    )
+    .sort((a, b) => b.rank - a.rank)  // rank 1 drawn on top
+    .call(g => g.transition(t).style("opacity", 1));
+}
+
+// --- Init ------------------------------------------------------------------
+d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/states-10m.json").then(us => {
+  const states = topojson.feature(us, us.objects.states);
+  states.features = states.features.filter(f => !NON_LOWER48.has(f.id));
+  projection = d3.geoAlbers().fitExtent([[50, 10], [W - 50, H - 10]], states);  // side margins leave room for nudged badges/labels
+  gStates.selectAll("path").data(states.features).join("path")
+    .attr("class", "state").attr("d", d3.geoPath(projection));
+  render(CATEGORIES[0]);
+});
+</script>
+</body>
+</html>

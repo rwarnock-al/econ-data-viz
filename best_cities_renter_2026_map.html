@@ -45,6 +45,7 @@
   .pill[aria-pressed="true"] { background: var(--purple-400); border-color: var(--purple-400); color: #fff; }
   .pill:focus-visible { outline: 2px solid var(--purple-400); outline-offset: 2px; }
 
+  .desc { font-size: 13px; color: var(--text-secondary); text-align: center; margin: 8px 12px 0; min-height: 1.6em; }
   svg { display: block; width: 100%; height: auto; }
   .state { fill: var(--land); stroke: var(--land-stroke); stroke-width: 0.75; stroke-linejoin: round; }
   .anchor { fill: var(--marker-stroke); }
@@ -57,14 +58,15 @@
   }
   .footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 12px; }
   .source { font-size: 12px; color: var(--text-secondary); }
-  .logo { height: 20px; width: auto; flex: none; }
+  .logo { height: 26px; width: auto; flex: none; }
 </style>
 </head>
 <body>
 <div class="viz">
   <h1 class="title">Best Cities For Renters: Category Ranks</h1>
   <div class="pills" role="group" aria-label="Ranking category"></div>
-  <svg id="map" viewBox="0 0 775 455" role="img" aria-label="Map of the top 10 cities for renters in the selected category"></svg>
+  <p class="desc" aria-live="polite"></p>
+  <svg id="map" viewBox="0 0 775 425" role="img" aria-label="Map of the top 10 cities for renters in the selected category"></svg>
   <div class="footer">
     <div class="source">Source: Apartment List Best Cities for Renters, 2026</div>
     <!-- Apartment List wordmark, "default" (light-surface) variant, from blueprints-component-library src/components/logo/assets/default.svg -->
@@ -144,9 +146,17 @@ const DATA = [
   {category: "Lifestyle", rank: 10, city: "Los Angeles, CA", lat: 34.0522, lon: -118.2437},
 ];
 
-const W = 775, H = 455, R = 11;            // viewBox size, badge radius
+const W = 775, H = 425, R = 11;            // viewBox size, badge radius
 const NON_LOWER48 = new Set(["02", "15", "60", "66", "69", "72", "78"]); // AK, HI, territories
 const CATEGORIES = [...new Set(DATA.map(d => d.category))];
+const DESCRIPTIONS = {
+  "Overall": "Weighted average of five categories: affordability, leverage, cost of living, economy, and lifestyle.",
+  "Housing Affordability": "Median Rents + Year-over-year Rent Growth + Renter Cost Burden",
+  "Housing Leverage": "Apartment Vacancy Rates + Amenity Scores + Concession Rates.",
+  "Cost of Living": "Cost of Groceries, Healthcare, Transportation, and Other Goods & Services.",
+  "Economic Opportunity": "Median Renter Household Income + Job Growth + Unemployment Rates",
+  "Lifestyle": "General Health Score + Walkability + Good Weather Days",
+};
 const LABELS = {"Washington, DC": "Washington DC"};  // display-name exceptions
 const shortName = city => LABELS[city] || city.split(",")[0];
 
@@ -177,7 +187,7 @@ const OVERRIDES = {
 
 // --- Layout ----------------------------------------------------------------
 // 1) project; 2) apply overrides, nudge remaining overlapping badges apart (force sim, run synchronously);
-// 3) place each label at the right/left/above/below/diagonal spot with the fewest collisions.
+// 3) place each label at the right/left/above/below/diagonal spot with the least overlap area.
 // Label positions are stored as the text's left edge (lx) and vertical center (ly) relative to
 // the badge, always rendered with text-anchor "start" so they can transition smoothly.
 function layout(category) {
@@ -191,7 +201,7 @@ function layout(category) {
   const sim = d3.forceSimulation(nodes)
     .force("x", d3.forceX(d => d.x0).strength(0.6))
     .force("y", d3.forceY(d => d.y0).strength(0.1))
-    .force("collide", d3.forceCollide(R + 3))
+    .force("collide", d3.forceCollide(R + 3).iterations(4))
     .stop();
   for (let i = 0; i < 300; i++) {
     sim.tick();
@@ -200,7 +210,8 @@ function layout(category) {
   nodes.forEach(n => { if (n.fx != null) { n.x = n.fx; n.y = n.fy; } });
 
   const boxes = nodes.map(n => ({x1: n.x - R, y1: n.y - R, x2: n.x + R, y2: n.y + R}));
-  const overlaps = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+  const overlapArea = (a, b) =>
+    Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)) * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
   const measure = gBadges.append("text").attr("class", "label").style("visibility", "hidden");
 
   [...nodes].sort((a, b) => a.rank - b.rank).forEach(n => {
@@ -217,7 +228,7 @@ function layout(category) {
       {side: "above-left",  lx: -d - w,     ly: -R - h / 2},
     ].map(o => ({...o, box: {x1: n.x + o.lx, x2: n.x + o.lx + w, y1: n.y + o.ly - h / 2, y2: n.y + o.ly + h / 2}}));
     const inBounds = b => b.x1 >= 0 && b.x2 <= W && b.y1 >= 0 && b.y2 <= H;
-    const score = o => (inBounds(o.box) ? 0 : 100) + boxes.filter(b => overlaps(o.box, b)).length;
+    const score = o => (inBounds(o.box) ? 0 : 1e6) + d3.sum(boxes, b => overlapArea(o.box, b));  // least overlap area wins
     const candidates = n.forceLabel ? options.filter(o => o.side === n.forceLabel) : options;
     const best = candidates.reduce((a, b) => score(b) < score(a) ? b : a);
     n.label = best;
@@ -232,6 +243,7 @@ function layout(category) {
 // fades out and the new one fades in (no sliding), even for cities that appear in both.
 function render(category) {
   pills.attr("aria-pressed", d => d === category);
+  d3.select(".desc").text(DESCRIPTIONS[category]);
   const nodes = layout(category);
   const key = d => `${d.category}|${d.city}`;
   const t = svg.transition().duration(firstRender ? 0 : 500);

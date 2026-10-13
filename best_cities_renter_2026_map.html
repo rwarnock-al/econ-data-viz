@@ -209,6 +209,16 @@ const OVERRIDES = {
     "Arlington, VA":     {dx: -16, dy: 8,   label: "left"},
   },
 };
+// Same idea for the phone layout (smaller badges, no map labels).
+const OVERRIDES_MOBILE = {
+  "Lifestyle": {
+    "San Francisco, CA": {dx: -10, dy: -16},
+    "Oakland, CA":       {dx: 11,  dy: -16},
+    "San Jose, CA":      {dx: -4,  dy: 16},
+    "Washington, DC":    {dx: 13,  dy: 4},
+    "Arlington, VA":     {dx: -13, dy: 7},
+  },
+};
 
 // --- Layout ----------------------------------------------------------------
 // 1) project; 2) apply overrides, nudge remaining overlapping badges apart (force sim, run synchronously);
@@ -216,7 +226,7 @@ const OVERRIDES = {
 // Label positions are stored as the text's left edge (lx) and vertical center (ly) relative to
 // the badge, always rendered with text-anchor "start" so they can transition smoothly.
 function layout(category) {
-  const overrides = mobile ? {} : (OVERRIDES[category] || {});  // overrides are tuned for desktop pixels
+  const overrides = (mobile ? OVERRIDES_MOBILE : OVERRIDES)[category] || {};
   const nodes = DATA.filter(d => d.category === category).map(d => {
     const [x, y] = projection([d.lon, d.lat]);
     const o = overrides[d.city];
@@ -232,7 +242,7 @@ function layout(category) {
     sim.tick();
     nodes.forEach(n => { n.x = Math.max(R + 2, Math.min(W - R - 2, n.x)); n.y = Math.max(R + 2, Math.min(H - R - 2, n.y)); });
   }
-  nodes.forEach(n => { if (n.fx != null) { n.x = n.fx; n.y = n.fy; } });
+  nodes.forEach(n => { if (n.fx != null) { n.x = Math.max(R + 2, Math.min(W - R - 2, n.fx)); n.y = Math.max(R + 2, Math.min(H - R - 2, n.fy)); } });
   if (mobile) return nodes;  // phone layout: names go in the ranked list, not on the map
 
   const boxes = nodes.map(n => ({x1: n.x - R, y1: n.y - R, x2: n.x + R, y2: n.y + R}));

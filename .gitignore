@@ -1,0 +1,12 @@
+# This repo is PUBLIC. Only commit finished, publishable chart files.
+.DS_Store
+*.csv
+*.parquet
+*.rds
+*.RData
+*.Rhistory
+.Rproj.user/
+*.Rmd
+*.sql
+drafts/
+data/
